@@ -201,6 +201,72 @@ export function registerFileRoutes(router, app) {
     });
   });
 
+  /**
+   * Знайти й замінити в перекладах файлу. apply=false (за замовчуванням) — лише попередній перегляд.
+   * Тіло: { find, replace, matchCase, wholeWord, scope: 'all'|'filter', filter, q, includeApproved, apply }.
+   * Змінюються лише переклади (не оригінал). Затверджені рядки пропускаються, якщо includeApproved не ввімкнено
+   * (і лише рецензент може їх змінити; вони стають «На вичитку»).
+   */
+  router.post('/api/files/:id/replace', async (ctx) => {
+    const user = requireUser(ctx);
+    const a = fileAccess(db, Number(ctx.params.id), user);
+    if (!a.canEdit) throw new HttpError(403, 'У вас немає доступу до редагування цього файлу.');
+    const body = await readJson(ctx.req, 64 * 1024);
+    const find = typeof body.find === 'string' ? body.find : '';
+    const replace = typeof body.replace === 'string' ? body.replace : '';
+    if (!find) throw new HttpError(400, 'Вкажіть, що шукати.');
+    if (find.length > 500 || replace.length > 5000) throw new HttpError(400, 'Текст пошуку або заміни задовгий.');
+    const matchCase = body.matchCase === true;
+    const wholeWord = body.wholeWord === true;
+    const includeApproved = body.includeApproved === true;
+    if (includeApproved && !a.canApprove) throw new HttpError(403, 'Змінювати затверджені рядки може лише рецензент.');
+
+    const esc = find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(wholeWord ? `(?<![\\p{L}\\p{N}_])${esc}(?![\\p{L}\\p{N}_])` : esc, matchCase ? 'gu' : 'giu');
+
+    let where = '';
+    let params = [];
+    if (body.scope === 'filter') ({ where, params } = filterClause(new URLSearchParams({ filter: body.filter || 'all', q: body.q || '' }), user));
+    const needle = matchCase ? find : find.toLowerCase();
+    const col = matchCase ? 'r.translation' : 'r.tr_lc';
+    const candidates = db.prepare(`SELECT r.* FROM rows r WHERE r.file_id = ? AND r.translation != '' AND instr(${col}, ?) > 0${where} ORDER BY r.pos`)
+      .all(a.file.id, needle, ...params);
+
+    const plan = [];
+    let occurrences = 0, skippedApproved = 0, tooLong = 0;
+    for (const row of candidates) {
+      let n = 0;
+      const next = row.translation.replace(re, () => { n++; return replace; });
+      if (!n || next === row.translation) continue;
+      if (row.status === 2 && !includeApproved) { skippedApproved++; continue; }
+      if (next.length > MAX_TRANSLATION) { tooLong++; continue; }
+      occurrences += n;
+      plan.push({ row, next });
+    }
+    const summary = { rows: plan.length, occurrences, skippedApproved, tooLong };
+
+    if (body.apply !== true) {
+      return { ...summary, applied: false, samples: plan.slice(0, 15).map(({ row, next }) => ({ rowId: row.id, key: row.row_key, before: row.translation, after: next })) };
+    }
+
+    const changed = tx(db, () => {
+      if (!plan.length) return 0;
+      const rev = bumpRev(a.file.id);
+      let n = 0;
+      for (const { row, next } of plan) {
+        const fresh = db.prepare('SELECT * FROM rows WHERE id = ? AND file_id = ?').get(row.id, a.file.id);
+        if (!fresh || fresh.translation !== row.translation || fresh.status !== row.status) continue; // змінився після перегляду
+        const input = { translation: next };
+        if (fresh.status === 2) input.status = next === '' || next === fresh.source ? 0 : 1;
+        if (applyChange(a.file, fresh, input, user, a.canApprove, rev)) n++;
+      }
+      touchUser(user, a.file.id);
+      return n;
+    });
+    if (changed) { stats.drop(a.file.id); strips.drop(a.file.id); }
+    return { ...summary, applied: true, changed };
+  });
+
   /** Опитування: зміни після ревізії since + хто зараз у файлі + статистика. Це ж і heartbeat присутності. */
   router.get('/api/files/:id/changes', (ctx) => {
     const user = requireUser(ctx);

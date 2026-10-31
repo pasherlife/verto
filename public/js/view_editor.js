@@ -3,6 +3,7 @@ import { get, post, patch, api, ApiError } from './api.js';
 import { topbar } from './app.js';
 import { pickAndImportTranslations, clearTranslations } from './translation_import.js';
 import { openExportDialog } from './export_dialog.js';
+import { openFindReplace } from './find_replace.js';
 import { createStrip } from './strip.js';
 
 const PAGE = 100;
@@ -96,7 +97,14 @@ export async function editorView(root, fileId) {
   const countLbl = h('span', { class: 'count num' });
   const selBox = h('div', { class: 'sel-actions hidden' });
   const reloadAll = () => { st.cache.clear(); st.gen++; resetList(); };
+  function openReplace() {
+    const filterLabels = { untranslated: 'без статусу', review: 'на вичитку', approved: 'затверджені', notapproved: 'незатверджені', changed: 'з перекладом', mine: 'мої' };
+    const q = searchInp.value.trim();
+    const label = [filterLabels[st.filter], q && `пошук «${q}»`].filter(Boolean).join(', ');
+    openFindReplace({ fileId, fileName: base, canApprove: perms.canApprove, getScope: () => ({ active: !!label, label, filter: st.filter, q }), onDone: reloadAll });
+  }
   const moreMenu = menu([
+    perms.canEdit && !perms.archived && { label: 'Знайти й замінити…', onclick: openReplace },
     perms.canEdit && { label: 'Змінити статус для всіх за фільтром…', onclick: () => bulkAll() },
     perms.canImport && !perms.archived && { label: 'Імпортувати переклад (.locres / .csv / .txt / .json)…', onclick: () => pickAndImportTranslations({ fileId, fileName: base, canApprove: perms.canApprove, onDone: reloadAll }) },
     perms.canExport && { label: 'Скачати…', onclick: () => openExportDialog({ fileId, fileName: base, sourceFormat: file.format }) },
