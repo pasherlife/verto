@@ -103,6 +103,7 @@ export async function editorView(root, fileId) {
     const label = [filterLabels[st.filter], q && `пошук «${q}»`].filter(Boolean).join(', ');
     openFindReplace({ fileId, fileName: base, canApprove: perms.canApprove, getScope: () => ({ active: !!label, label, filter: st.filter, q }), onDone: reloadAll });
   }
+  const replaceBtn = h('button', { class: 'btn', type: 'button', title: 'Масова заміна тексту в перекладах цього файлу', onclick: openReplace }, 'Знайти й замінити');
   const moreMenu = menu([
     perms.canEdit && !perms.archived && { label: 'Знайти й замінити…', onclick: openReplace },
     perms.canEdit && { label: 'Змінити статус для всіх за фільтром…', onclick: () => bulkAll() },
@@ -147,7 +148,7 @@ export async function editorView(root, fileId) {
     topbar([{ label: 'Проєкти', href: '#/' }, { label: file.project, href: `#/p/${file.projectId}` }, { label: base }]),
     h('div', { class: 'editor-top' }, statsBox, h('div', { class: 'editor-strip-row' }, strip.el), legend),
     h('div', { class: 'toolbar' },
-      h('div', { class: 'toolbar-row' }, searchInp, gotoInp, chips, countLbl, selBox, moreMenu)),
+      h('div', { class: 'toolbar-row' }, searchInp, gotoInp, perms.canEdit && !perms.archived && replaceBtn, chips, countLbl, selBox, moreMenu)),
     h('div', { class: 'grid' },
       h('div', { class: 'grid-head', 'aria-hidden': 'true' }, h('div', null, '№'), h('div', null, 'ID'), h('div', null, 'Оригінал'), h('div', null, 'Переклад'), h('div', null, '')),
       emptyNote, body),
