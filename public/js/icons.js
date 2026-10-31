@@ -99,3 +99,21 @@ export function roleSelect({ value, roles, disabled = false, label = 'Роль �
   paint();
   return root;
 }
+
+/** Службові іконки інтерфейсу (той самий стиль, що й у ролей). */
+const UI_ICON_PARTS = {
+  // лупа з двома стрілками всередині: «знайти й замінити»
+  replace: ['M10.5 4a6.5 6.5 0 100 13 6.5 6.5 0 000-13z', 'M15.5 16l5.5 5.5', 'M7.5 9.5h6l-1.8-1.8', 'M13.5 12.5h-6l1.8 1.8'],
+};
+
+export function uiIcon(name, size = 18) {
+  const svg = roleIcon('user', size);
+  svg.replaceChildren();
+  svg.setAttribute('class', 'ui-ic');
+  for (const d of UI_ICON_PARTS[name] ?? []) {
+    const p = document.createElementNS(NS, 'path');
+    p.setAttribute('d', d);
+    svg.append(p);
+  }
+  return svg;
+}

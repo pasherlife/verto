@@ -4,6 +4,7 @@ import { topbar } from './app.js';
 import { pickAndImportTranslations, clearTranslations } from './translation_import.js';
 import { openExportDialog } from './export_dialog.js';
 import { openFindReplace } from './find_replace.js';
+import { uiIcon } from './icons.js';
 import { createStrip } from './strip.js';
 
 const PAGE = 100;
@@ -103,7 +104,7 @@ export async function editorView(root, fileId) {
     const label = [filterLabels[st.filter], q && `пошук «${q}»`].filter(Boolean).join(', ');
     openFindReplace({ fileId, fileName: base, canApprove: perms.canApprove, getScope: () => ({ active: !!label, label, filter: st.filter, q }), onDone: reloadAll });
   }
-  const replaceBtn = h('button', { class: 'btn', type: 'button', title: 'Масова заміна тексту в перекладах цього файлу', onclick: openReplace }, 'Знайти й замінити');
+  const replaceBtn = h('button', { class: 'btn icon', type: 'button', title: 'Знайти й замінити', 'aria-label': 'Знайти й замінити в перекладах', onclick: openReplace }, uiIcon('replace', 18));
   const moreMenu = menu([
     perms.canEdit && !perms.archived && { label: 'Знайти й замінити…', onclick: openReplace },
     perms.canEdit && { label: 'Змінити статус для всіх за фільтром…', onclick: () => bulkAll() },
